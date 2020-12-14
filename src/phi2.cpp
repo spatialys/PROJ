@@ -63,6 +63,6 @@ by Snyder (1987), Eqs. (7-9) - (7-11)
         break;
     }
     if (i <= 0)
-        pj_ctx_set_errno(ctx, PJD_ERR_NON_CON_INV_PHI2);
+        proj_context_errno_set(ctx, PROJ_ERR_INVALID_OP_ILLEGAL_ARG_VALUE);
     return M_HALFPI - 2. * atan(ts);
 }

@@ -393,7 +393,7 @@ TEST(pj_transform_test, longlat_nadgrids_to_datum) {
     double y = 40 * DEG_TO_RAD;
     double z = 10;
     int ret = pj_transform(src, dst, 1, 0, &x, &y, &z);
-    EXPECT_TRUE(ret == 0 || ret == PJD_ERR_FAILED_TO_LOAD_GRID);
+    EXPECT_TRUE(ret == 0 || ret == PROJ_ERR_COORD_TRANSFM_OUTSIDE_GRID);
     if (ret == 0) {
         EXPECT_NEAR(x, -100.00040583667015 * DEG_TO_RAD, 1e-12)
             << x / DEG_TO_RAD;
@@ -433,7 +433,7 @@ TEST(pj_transform_test, datum_to_longlat_nadgrids) {
     double y = 40.000005895651363 * DEG_TO_RAD;
     double z = 10.000043224543333;
     int ret = pj_transform(src, dst, 1, 0, &x, &y, &z);
-    EXPECT_TRUE(ret == 0 || ret == PJD_ERR_FAILED_TO_LOAD_GRID);
+    EXPECT_TRUE(ret == 0 || ret == PROJ_ERR_COORD_TRANSFM_OUTSIDE_GRID);
     if (ret == 0) {
         EXPECT_NEAR(x, -100 * DEG_TO_RAD, 1e-12) << x / DEG_TO_RAD;
         EXPECT_NEAR(y, 40 * DEG_TO_RAD, 1e-12) << y / DEG_TO_RAD;

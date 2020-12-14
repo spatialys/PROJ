@@ -30,7 +30,6 @@
 #define PJ_LIB__
 
 #include <ctype.h>
-#include <errno.h>
 #include <math.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -55,7 +54,7 @@ static paralist *string_to_paralist (PJ_CONTEXT *ctx, char *definition) {
         /* Keep a handle to the start of the list, so we have something to return */
         auto param = pj_mkparam_ws (c, &c);
         if (nullptr==param) {
-            pj_dealloc_params (ctx, first, ENOMEM);
+            pj_dealloc_params (ctx, first, PROJ_ERR_INVALID_OP /*ENOMEM*/);
             return nullptr;
         }
         if (nullptr==last) {
@@ -104,7 +103,8 @@ static char *get_init_string (PJ_CONTEXT *ctx, const char *name) {
     /* Locate the name of the section we search for */
     section = strrchr(fname, ':');
     if (nullptr==section) {
-        proj_context_errno_set (ctx, PJD_ERR_NO_COLON_IN_INIT_STRING);
+        pj_log(ctx, PJ_LOG_ERROR, _("Missing colon in +init"));
+        proj_context_errno_set (ctx, PROJ_ERR_INVALID_OP_ILLEGAL_ARG_VALUE);
         pj_dealloc (fname);
         return nullptr;
     }
@@ -117,8 +117,9 @@ static char *get_init_string (PJ_CONTEXT *ctx, const char *name) {
 
     auto file = NS_PROJ::FileManager::open_resource_file(ctx, fname);
     if (nullptr==file) {
+        pj_log(ctx, PJ_LOG_ERROR, _("Cannot open %s"), fname);
+        proj_context_errno_set (ctx, PROJ_ERR_INVALID_OP_ILLEGAL_ARG_VALUE);
         pj_dealloc (fname);
-        proj_context_errno_set (ctx, PJD_ERR_NO_OPTION_IN_INIT_FILE);
         return nullptr;
     }
 
@@ -131,8 +132,9 @@ static char *get_init_string (PJ_CONTEXT *ctx, const char *name) {
         line = file->read_line(MAX_LINE_LENGTH, maxLenReached, eofReached);
         /* End of file? */
         if (maxLenReached || eofReached) {
+            pj_log(ctx, PJ_LOG_ERROR, _("Invalid content for %s"), fname);
+            proj_context_errno_set (ctx, PROJ_ERR_INVALID_OP_ILLEGAL_ARG_VALUE);
             pj_dealloc (fname);
-            proj_context_errno_set (ctx, PJD_ERR_NO_OPTION_IN_INIT_FILE);
             return nullptr;
         }
 
@@ -448,7 +450,7 @@ pj_init_plus_ctx( projCtx ctx, const char *definition )
                 if( argc+1 == MAX_ARG )
                 {
                     pj_dalloc( defn_copy );
-                    pj_ctx_set_errno( ctx, PJD_ERR_UNPARSEABLE_CS_DEF );
+                    pj_ctx_set_errno( ctx, PROJ_ERR_INVALID_OP_WRONG_SYNTAX );
                     return nullptr;
                 }
 
@@ -538,7 +540,8 @@ pj_init_ctx_with_allow_init_epsg(projCtx ctx, int argc, char **argv, int allow_i
     ctx->last_errno = 0;
 
     if (argc <= 0) {
-        pj_ctx_set_errno (ctx, PJD_ERR_NO_ARGS);
+        pj_log(ctx, PJ_LOG_ERROR, _("No arguments"));
+        proj_context_errno_set (ctx, PROJ_ERR_INVALID_OP_MISSING_ARG);
         return nullptr;
     }
 
@@ -552,13 +555,15 @@ pj_init_ctx_with_allow_init_epsg(projCtx ctx, int argc, char **argv, int allow_i
 
     /* can't have nested pipelines directly */
     if (n_pipelines > 1) {
-        pj_ctx_set_errno (ctx, PJD_ERR_MALFORMED_PIPELINE);
+        pj_log(ctx, PJ_LOG_ERROR, _("Nested pipelines are not supported"));
+        proj_context_errno_set (ctx, PROJ_ERR_INVALID_OP_WRONG_SYNTAX);
         return nullptr;
     }
 
     /* don't allow more than one +init in non-pipeline operations */
     if (n_pipelines == 0 && n_inits > 1) {
-        pj_ctx_set_errno (ctx, PJD_ERR_TOO_MANY_INITS);
+        pj_log(ctx, PJ_LOG_ERROR, _("Too many inits"));
+        proj_context_errno_set (ctx, PROJ_ERR_INVALID_OP_WRONG_SYNTAX);
         return nullptr;
     }
 
@@ -566,14 +571,14 @@ pj_init_ctx_with_allow_init_epsg(projCtx ctx, int argc, char **argv, int allow_i
     /* put arguments into internal linked list */
     start = curr = pj_mkparam(argv[0]);
     if (!curr) {
-        pj_dealloc_params (ctx, start, ENOMEM);
+        pj_dealloc_params (ctx, start, PROJ_ERR_INVALID_OP /*ENOMEM*/);
         return nullptr;
     }
 
     for (i = 1; i < argc; ++i) {
         curr->next = pj_mkparam(argv[i]);
         if (!curr->next) {
-            pj_dealloc_params (ctx, start, ENOMEM);
+            pj_dealloc_params (ctx, start, PROJ_ERR_INVALID_OP /*ENOMEM*/);
             return nullptr;
         }
         curr = curr->next;
@@ -588,7 +593,7 @@ pj_init_ctx_with_allow_init_epsg(projCtx ctx, int argc, char **argv, int allow_i
     if (init && n_pipelines == 0) {
         init = pj_expand_init_internal (ctx, init, allow_init_epsg);
         if (!init) {
-            pj_dealloc_params (ctx, start, PJD_ERR_NO_ARGS);
+            pj_dealloc_params (ctx, start, PROJ_ERR_INVALID_OP_WRONG_SYNTAX);
             return nullptr;
         }
     }
@@ -600,19 +605,22 @@ pj_init_ctx_with_allow_init_epsg(projCtx ctx, int argc, char **argv, int allow_i
     /* Find projection selection */
     curr = pj_param_exists (start, "proj");
     if (nullptr==curr) {
-        pj_dealloc_params (ctx, start, PJD_ERR_PROJ_NOT_NAMED);
+        pj_log(ctx, PJ_LOG_ERROR, _("Missing proj"));
+        pj_dealloc_params (ctx, start, PROJ_ERR_INVALID_OP_MISSING_ARG);
         return nullptr;
     }
     name =  curr->param;
     if (strlen (name) < 6) {
-        pj_dealloc_params (ctx, start, PJD_ERR_PROJ_NOT_NAMED);
+        pj_log(ctx, PJ_LOG_ERROR, _("Invalid value for proj"));
+        pj_dealloc_params (ctx, start, PROJ_ERR_INVALID_OP_ILLEGAL_ARG_VALUE);
         return nullptr;
     }
     name += 5;
 
     proj = locate_constructor (name);
     if (nullptr==proj) {
-        pj_dealloc_params (ctx, start, PJD_ERR_UNKNOWN_PROJECTION_ID);
+        pj_log(ctx, PJ_LOG_ERROR, _("Unknown projection"));
+        pj_dealloc_params (ctx, start, PROJ_ERR_INVALID_OP_ILLEGAL_ARG_VALUE);
         return nullptr;
     }
 
@@ -621,7 +629,7 @@ pj_init_ctx_with_allow_init_epsg(projCtx ctx, int argc, char **argv, int allow_i
     /* Allocate projection structure */
     PIN = proj(nullptr);
     if (nullptr==PIN) {
-        pj_dealloc_params (ctx, start, ENOMEM);
+        pj_dealloc_params (ctx, start, PROJ_ERR_INVALID_OP /*ENOMEM*/);
         return nullptr;
     }
 
@@ -647,11 +655,11 @@ pj_init_ctx_with_allow_init_epsg(projCtx ctx, int argc, char **argv, int allow_i
     if (err) {
         /* Didn't get an ellps, but doesn't need one: Get a free WGS84 */
         if (PIN->need_ellps) {
-            pj_log (ctx, PJ_LOG_DEBUG_MINOR, "pj_init_ctx: Must specify ellipsoid or sphere");
+            pj_log (ctx, PJ_LOG_ERROR, _("pj_init_ctx: Must specify ellipsoid or sphere"));
             return pj_default_destructor (PIN, proj_errno(PIN));
         }
         else {
-            if (PJD_ERR_MAJOR_AXIS_NOT_GIVEN==proj_errno (PIN))
+            if (PIN->a == 0)
                 proj_errno_reset (PIN);
             PIN->f = 1.0/298.257223563;
             PIN->a  = 6378137.0;
@@ -661,7 +669,7 @@ pj_init_ctx_with_allow_init_epsg(projCtx ctx, int argc, char **argv, int allow_i
     PIN->a_orig = PIN->a;
     PIN->es_orig = PIN->es;
     if (pj_calc_ellipsoid_params (PIN, PIN->a, PIN->es))
-        return pj_default_destructor (PIN, PJD_ERR_INVALID_ECCENTRICITY);
+        return pj_default_destructor (PIN, PROJ_ERR_INVALID_OP_ILLEGAL_ARG_VALUE);
 
     /* Now that we have ellipse information check for WGS84 datum */
     if( PIN->datum_type == PJD_3PARAM
@@ -693,7 +701,10 @@ pj_init_ctx_with_allow_init_epsg(projCtx ctx, int argc, char **argv, int allow_i
         /* when correcting longitudes around it */
         /* The test is written this way to error on long_wrap_center "=" NaN */
         if( !(fabs(PIN->long_wrap_center) < 10 * M_TWOPI) )
-            return pj_default_destructor (PIN, PJD_ERR_LAT_OR_LON_EXCEED_LIMIT);
+        {
+            proj_log_error(PIN, _("Invalid value for lon_wrap"));
+            return pj_default_destructor (PIN, PROJ_ERR_INVALID_OP_ILLEGAL_ARG_VALUE);
+        }
     }
 
     /* Axis orientation */
@@ -702,12 +713,18 @@ pj_init_ctx_with_allow_init_epsg(projCtx ctx, int argc, char **argv, int allow_i
         const char *axis_legal = "ewnsud";
         const char *axis_arg = pj_param(ctx, start,"saxis").s;
         if( strlen(axis_arg) != 3 )
-            return pj_default_destructor (PIN, PJD_ERR_AXIS);
+        {
+            proj_log_error(PIN, _("Invalid value for axis"));
+            return pj_default_destructor (PIN, PROJ_ERR_INVALID_OP_ILLEGAL_ARG_VALUE);
+        }
 
         if( strchr( axis_legal, axis_arg[0] ) == nullptr
             || strchr( axis_legal, axis_arg[1] ) == nullptr
             || strchr( axis_legal, axis_arg[2] ) == nullptr)
-            return pj_default_destructor (PIN, PJD_ERR_AXIS);
+        {
+            proj_log_error(PIN, _("Invalid value for axis"));
+            return pj_default_destructor (PIN, PROJ_ERR_INVALID_OP_ILLEGAL_ARG_VALUE);
+        }
 
         /* TODO: it would be nice to validate we don't have on axis repeated */
         strcpy( PIN->axis, axis_arg );
@@ -719,7 +736,10 @@ pj_init_ctx_with_allow_init_epsg(projCtx ctx, int argc, char **argv, int allow_i
     /* Central latitude */
     PIN->phi0 = pj_param(ctx, start, "rlat_0").f;
     if( fabs(PIN->phi0) > M_HALFPI )
-        return pj_default_destructor (PIN, PJD_ERR_LAT_LARGER_THAN_90);
+    {
+        proj_log_error(PIN, _("Invalid value for lat_0: |lat_0| should be <= 90°"));
+        return pj_default_destructor (PIN, PROJ_ERR_INVALID_OP_ILLEGAL_ARG_VALUE);
+    }
 
     /* False easting and northing */
     PIN->x0 = pj_param(ctx, start, "dx_0").f;
@@ -735,7 +755,10 @@ pj_init_ctx_with_allow_init_epsg(projCtx ctx, int argc, char **argv, int allow_i
     else
         PIN->k0 = 1.;
     if (PIN->k0 <= 0.)
-        return pj_default_destructor (PIN, PJD_ERR_K_LESS_THAN_ZERO);
+    {
+        proj_log_error(PIN, _("Invalid value for k/k_0: it should be > 0"));
+        return pj_default_destructor (PIN, PROJ_ERR_INVALID_OP_ILLEGAL_ARG_VALUE);
+    }
 
     /* Set units */
     units = pj_list_linear_units();
@@ -743,7 +766,10 @@ pj_init_ctx_with_allow_init_epsg(projCtx ctx, int argc, char **argv, int allow_i
     if ((name = pj_param(ctx, start, "sunits").s) != nullptr) {
         for (i = 0; (s = units[i].id) && strcmp(name, s) ; ++i) ;
         if (!s)
-            return pj_default_destructor (PIN, PJD_ERR_UNKNOWN_UNIT_ID);
+        {
+            proj_log_error(PIN, _("Invalid value for units"));
+            return pj_default_destructor (PIN, PROJ_ERR_INVALID_OP_ILLEGAL_ARG_VALUE);
+        }
         s = units[i].to_meter;
     }
     if (s || (s = pj_param(ctx, start, "sto_meter").s)) {
@@ -754,11 +780,17 @@ pj_init_ctx_with_allow_init_epsg(projCtx ctx, int argc, char **argv, int allow_i
             ++s;
             double denom = pj_strtod(s, nullptr);
             if (denom == 0.0)
-                return pj_default_destructor (PIN, PJD_ERR_UNIT_FACTOR_LESS_THAN_0);
+            {
+                proj_log_error(PIN, _("Invalid value for to_meter donominator"));
+                return pj_default_destructor (PIN, PROJ_ERR_INVALID_OP_ILLEGAL_ARG_VALUE);
+            }
             PIN->to_meter /= denom;
         }
         if (PIN->to_meter <= 0.0)
-            return pj_default_destructor (PIN, PJD_ERR_UNIT_FACTOR_LESS_THAN_0);
+        {
+            proj_log_error(PIN, _("Invalid value for to_meter"));
+            return pj_default_destructor (PIN, PROJ_ERR_INVALID_OP_ILLEGAL_ARG_VALUE);
+        }
         PIN->fr_meter = 1 / PIN->to_meter;
 
     } else
@@ -769,7 +801,10 @@ pj_init_ctx_with_allow_init_epsg(projCtx ctx, int argc, char **argv, int allow_i
     if ((name = pj_param(ctx, start, "svunits").s) != nullptr) {
         for (i = 0; (s = units[i].id) && strcmp(name, s) ; ++i) ;
         if (!s)
-            return pj_default_destructor (PIN, PJD_ERR_UNKNOWN_UNIT_ID);
+        {
+            proj_log_error(PIN, _("Invalid value for vunits"));
+            return pj_default_destructor (PIN, PROJ_ERR_INVALID_OP_ILLEGAL_ARG_VALUE);
+        }
         s = units[i].to_meter;
     }
     if (s || (s = pj_param(ctx, start, "svto_meter").s)) {
@@ -780,11 +815,17 @@ pj_init_ctx_with_allow_init_epsg(projCtx ctx, int argc, char **argv, int allow_i
             ++s;
             double denom = pj_strtod(s, nullptr);
             if (denom == 0.0)
-                return pj_default_destructor (PIN, PJD_ERR_UNIT_FACTOR_LESS_THAN_0);
+            {
+                proj_log_error(PIN, _("Invalid value for vto_meter donominator"));
+                return pj_default_destructor (PIN, PROJ_ERR_INVALID_OP_ILLEGAL_ARG_VALUE);
+            }
             PIN->vto_meter /= denom;
         }
         if (PIN->vto_meter <= 0.0)
-            return pj_default_destructor (PIN, PJD_ERR_UNIT_FACTOR_LESS_THAN_0);
+        {
+            proj_log_error(PIN, _("Invalid value for vto_meter"));
+            return pj_default_destructor (PIN, PROJ_ERR_INVALID_OP_ILLEGAL_ARG_VALUE);
+        }
         PIN->vfr_meter = 1. / PIN->vto_meter;
     } else {
         PIN->vto_meter = PIN->to_meter;
@@ -813,7 +854,10 @@ pj_init_ctx_with_allow_init_epsg(projCtx ctx, int argc, char **argv, int allow_i
             value = name;
 
         if (!value)
-            return pj_default_destructor (PIN, PJD_ERR_UNKNOWN_PRIME_MERIDIAN);
+        {
+            proj_log_error(PIN, _("Invalid value for pm"));
+            return pj_default_destructor (PIN, PROJ_ERR_INVALID_OP_ILLEGAL_ARG_VALUE);
+        }
         PIN->from_greenwich = dmstor_ctx(ctx,value,nullptr);
     }
     else
@@ -822,7 +866,7 @@ pj_init_ctx_with_allow_init_epsg(projCtx ctx, int argc, char **argv, int allow_i
     /* Private object for the geodesic functions */
     PIN->geod = static_cast<struct geod_geodesic*>(pj_calloc (1, sizeof (struct geod_geodesic)));
     if (nullptr==PIN->geod)
-        return pj_default_destructor (PIN, ENOMEM);
+        return pj_default_destructor (PIN, PROJ_ERR_INVALID_OP /*ENOMEM*/);
     geod_init(PIN->geod, PIN->a,  (1 - sqrt (1 - PIN->es)));
 
     /* Projection specific initialization */

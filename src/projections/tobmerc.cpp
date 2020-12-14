@@ -23,7 +23,7 @@ static PJ_XY tobmerc_s_forward (PJ_LP lp, PJ *P) {           /* Spheroidal, forw
     double cosphi;
 
     if (fabs(fabs(lp.phi) - M_HALFPI) <= EPS10) {
-        proj_errno_set(P, PJD_ERR_TOLERANCE_CONDITION);
+        proj_errno_set(P, PROJ_ERR_COORD_TRANSFM_OUTSIDE_PROJECTION_DOMAIN);
         return xy;
     }
 

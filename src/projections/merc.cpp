@@ -22,7 +22,7 @@ static double logtanpfpim1(double x) {       /* log(tan(x/2 + M_FORTPI)) */
 static PJ_XY merc_e_forward (PJ_LP lp, PJ *P) {          /* Ellipsoidal, forward */
     PJ_XY xy = {0.0,0.0};
     if (fabs(fabs(lp.phi) - M_HALFPI) <= EPS10) {
-        proj_errno_set(P, PJD_ERR_TOLERANCE_CONDITION);
+        proj_errno_set(P, PROJ_ERR_COORD_TRANSFM_OUTSIDE_PROJECTION_DOMAIN);
         return xy;
     }
     xy.x = P->k0 * lp.lam;
@@ -34,7 +34,7 @@ static PJ_XY merc_e_forward (PJ_LP lp, PJ *P) {          /* Ellipsoidal, forward
 static PJ_XY merc_s_forward (PJ_LP lp, PJ *P) {           /* Spheroidal, forward */
     PJ_XY xy = {0.0,0.0};
     if (fabs(fabs(lp.phi) - M_HALFPI) <= EPS10) {
-        proj_errno_set(P, PJD_ERR_TOLERANCE_CONDITION);
+        proj_errno_set(P, PROJ_ERR_COORD_TRANSFM_OUTSIDE_PROJECTION_DOMAIN);
         return xy;
 }
     xy.x = P->k0 * lp.lam;
@@ -46,7 +46,7 @@ static PJ_XY merc_s_forward (PJ_LP lp, PJ *P) {           /* Spheroidal, forward
 static PJ_LP merc_e_inverse (PJ_XY xy, PJ *P) {          /* Ellipsoidal, inverse */
     PJ_LP lp = {0.0,0.0};
     if ((lp.phi = pj_phi2(P->ctx, exp(- xy.y / P->k0), P->e)) == HUGE_VAL) {
-        proj_errno_set(P, PJD_ERR_TOLERANCE_CONDITION);
+        proj_errno_set(P, PROJ_ERR_COORD_TRANSFM_OUTSIDE_PROJECTION_DOMAIN);
         return lp;
 }
     lp.lam = xy.x / P->k0;
@@ -69,7 +69,10 @@ PJ *PROJECTION(merc) {
     if( (is_phits = pj_param(P->ctx, P->params, "tlat_ts").i) ) {
         phits = fabs(pj_param(P->ctx, P->params, "rlat_ts").f);
         if (phits >= M_HALFPI)
-            return pj_default_destructor(P, PJD_ERR_LAT_TS_LARGER_THAN_90);
+        {
+            proj_log_error(P, _("Invalid value for lat_ts: |lat_ts| should be <= 90°"));
+            return pj_default_destructor(P, PROJ_ERR_INVALID_OP_ILLEGAL_ARG_VALUE);
+        }
     }
 
     if (P->es != 0.0) { /* ellipsoid */
