@@ -1276,8 +1276,20 @@ std::vector<CoordOperation> pj_create_prepared_operations(PJ_CONTEXT *ctx,
     }
 }
 
+// ---------------------------------------------------------------------------
+
+//! @cond Doxygen_Suppress
+static const char *getOptionValue(const char *option,
+                                  const char *keyWithEqual) noexcept {
+    if (ci_starts_with(option, keyWithEqual)) {
+        return option + strlen(keyWithEqual);
+    }
+    return nullptr;
+}
+//! @endcond
+
 /*****************************************************************************/
-PJ  *proj_create_crs_to_crs_from_pj (PJ_CONTEXT *ctx, const PJ *source_crs, const PJ *target_crs, PJ_AREA *area, const char* const *) {
+PJ  *proj_create_crs_to_crs_from_pj (PJ_CONTEXT *ctx, const PJ *source_crs, const PJ *target_crs, PJ_AREA *area, const char* const * options) {
 /******************************************************************************
     Create a transformation pipeline between two known coordinate reference
     systems.
@@ -1289,9 +1301,44 @@ PJ  *proj_create_crs_to_crs_from_pj (PJ_CONTEXT *ctx, const PJ *source_crs, cons
         ctx = pj_get_default_ctx();
     }
 
-    auto operation_ctx = proj_create_operation_factory_context(ctx, nullptr);
+    const char* authority = nullptr;
+    double accuracy = -1;
+    bool allowBallparkTransformations = true;
+    for (auto iter = options; iter && iter[0]; ++iter) {
+        const char *value;
+        if ((value = getOptionValue(*iter, "AUTHORITY="))) {
+            authority = value;
+        } else if ((value = getOptionValue(*iter, "ACCURACY="))) {
+            accuracy = pj_atof(value);
+        } else if ((value = getOptionValue(*iter, "ALLOW_BALLPARK="))) {
+            if( ci_equal(value, "yes") )
+                allowBallparkTransformations = true;
+            else if( ci_equal(value, "no") )
+                allowBallparkTransformations = false;
+            else {
+                ctx->logger(ctx->logger_app_data, PJ_LOG_ERROR,
+                            "Invalid value for ALLOW_BALLPARK option.");
+                return nullptr;
+            }
+        } else {
+            std::string msg("Unknown option :");
+            msg += *iter;
+            ctx->logger(ctx->logger_app_data, PJ_LOG_ERROR, msg.c_str());
+            return nullptr;
+        }
+    }
+
+    auto operation_ctx = proj_create_operation_factory_context(ctx, authority);
     if( !operation_ctx ) {
         return nullptr;
+    }
+
+    proj_operation_factory_context_set_allow_ballpark_transformations(
+        ctx, operation_ctx, allowBallparkTransformations);
+
+    if( accuracy >= 0 ) {
+        proj_operation_factory_context_set_desired_accuracy(ctx, operation_ctx,
+                                                            accuracy);
     }
 
     if( area && area->bbox_set ) {

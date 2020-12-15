@@ -182,7 +182,15 @@ paragraph for more details.
     This is the same as :c:func:`proj_create_crs_to_crs` except that the source and
     target CRS are passed as PJ* objects which must of the CRS variety.
 
-    :param `options`: should be set to NULL currently.
+    :param `options`: a list of NUL terminated options, or NULL.
+
+    The list of supported options is:
+
+    - ACCURACY=value: to set the minimum desired accuracy (in metres) of the
+      candidate coordinate operations.
+
+    - ALLOW_BALLPARK=YES/NO: can be set to NO to disallow the use of
+      :term:`Ballpark transformation` in the candidate coordinate operations.
 
 .. doxygenfunction:: proj_normalize_for_visualization
    :project: doxygen_api
