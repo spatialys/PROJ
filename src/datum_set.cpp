@@ -87,7 +87,7 @@ int pj_datum_set(projCtx ctx, paralist *pl, PJ *projdef)
             curr = curr->next = pj_mkparam(entry);
             if (nullptr == curr)
             {
-                proj_context_errno_set(ctx, PROJ_ERR_INVALID_OP /*ENOMEM*/);
+                proj_context_errno_set(ctx, PROJ_ERR_OTHER /*ENOMEM*/);
                 return 1;
             }
         }
@@ -97,7 +97,7 @@ int pj_datum_set(projCtx ctx, paralist *pl, PJ *projdef)
             curr = curr->next = pj_mkparam(pj_datums[i].defn);
             if (nullptr == curr)
             {
-                proj_context_errno_set(ctx, PROJ_ERR_INVALID_OP /*ENOMEM*/);
+                proj_context_errno_set(ctx, PROJ_ERR_OTHER /*ENOMEM*/);
                 return 1;
             }
         }
