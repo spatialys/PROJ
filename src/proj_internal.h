@@ -364,6 +364,7 @@ struct PJconsts {
     **************************************************************************************/
 
     projCtx_t *ctx = nullptr;
+    const char *short_name = nullptr; /* From pj_list.h */
     const char *descr = nullptr;   /* From pj_list.h or individual PJ_*.c file */
     paralist *params = nullptr;    /* Parameter list */
     char *def_full = nullptr;      /* Full textual definition (usually 0 - set by proj_pj_info) */
@@ -731,6 +732,7 @@ C_NAMESPACE PJ *pj_##name (PJ *P) {                          \
     P = pj_new();                                            \
     if (nullptr==P)                                          \
         return nullptr;                                      \
+    P->short_name = #name;                                   \
     P->descr = des_##name;                                   \
     P->need_ellps = NEED_ELLPS;                              \
     P->left  = PJ_IO_UNITS_RADIANS;                          \
